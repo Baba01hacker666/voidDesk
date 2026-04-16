@@ -109,7 +109,8 @@ fi
 
 # ── Launch VoidDesk ───────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVER_DIR="$SCRIPT_DIR/server"
+PROJECT_DIR="$SCRIPT_DIR"
+cd "$PROJECT_DIR"
 
 echo ""
 log "Starting VoidDesk server..."
@@ -121,7 +122,7 @@ echo ""
 ok "Open browser → http://localhost:$PORT/../client/index.html"
 echo ""
 
-python3 "$SERVER_DIR/main.py" \
+python3 -m server.main \
   --host 0.0.0.0 \
   --port "$PORT" \
   --display "$DISPLAY" \

@@ -14,14 +14,13 @@ from typing import Set, Optional
 import websockets
 from websockets.server import WebSocketServerProtocol
 
-from config import VoidDeskConfig
-from capture.x11 import X11Capture
-from capture.framebuffer import FramebufferCapture
-from capture.wayland import WaylandCapture
-from encoder.ffmpeg_pipe import FFmpegEncoder, MIME_TYPES
-from encoder.jpeg_fallback import jpeg_frame_generator
-from input.xdotool import inject_event
-from input.uinput_backend import inject_event_uinput
+from ..config import VoidDeskConfig
+from ..capture.x11 import X11Capture
+from ..capture.framebuffer import FramebufferCapture
+from ..capture.wayland import WaylandCapture
+from ..encoder import FFmpegEncoder, MIME_TYPES
+from ..input.xdotool import inject_event
+from ..input.uinput_backend import inject_event_uinput
 
 log = logging.getLogger("voiddesk.ws")
 
@@ -93,29 +92,6 @@ class VoidDeskWS:
             self.encoder.stop()
             log.info("Stream stopped")
 
-    async def _broadcast_jpeg_stream(self):
-        """JPEG fallback broadcast loop."""
-        import asyncio
-        loop = asyncio.get_event_loop()
-        gen = jpeg_frame_generator(
-            backend=self.config.backend,
-            display=self.config.display,
-            width=self.config.width,
-            height=self.config.height,
-            fps=self.config.fps,
-        )
-        log.info("JPEG fallback stream started")
-        try:
-            while self.clients:
-                frame = await loop.run_in_executor(None, next, gen)
-                if self.clients:
-                    await asyncio.gather(
-                        *[self._safe_send(c, frame) for c in list(self.clients)],
-                        return_exceptions=True,
-                    )
-        except asyncio.CancelledError:
-            pass
-
     async def _safe_send(self, ws: WebSocketServerProtocol, data: bytes):
         try:
             await ws.send(data)
@@ -159,12 +135,7 @@ class VoidDeskWS:
             self.clients.add(ws)
             if len(self.clients) == 1:
                 # First client — start streaming
-                stream_fn = (
-                    self._broadcast_jpeg_stream
-                    if self.config.codec == "jpeg" and False  # force ffmpeg by default
-                    else self._broadcast_stream
-                )
-                self.stream_task = asyncio.create_task(stream_fn())
+                self.stream_task = asyncio.create_task(self._broadcast_stream())
 
         try:
             async for message in ws:
