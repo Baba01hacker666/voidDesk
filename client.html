@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VoidDesk</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --border: #1e1e2e;
+      --accent: #7c6af7;
+      --accent2: #3ecfcf;
+      --text: #e2e2f0;
+      --muted: #6b6b8a;
+      --red: #f87171;
+      --green: #4ade80;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Topbar ── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    #logo {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+    }
+    #logo span { color: var(--accent2); }
+
+    #status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    #status-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    #status-dot.disconnected { background: var(--red); }
+    #status-dot.connecting   { background: #fbbf24; animation: pulse 1s infinite; }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    #status-text { font-size: 11px; color: var(--muted); }
+
+    .spacer { flex: 1; }
+
+    #stats {
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+    }
+    #stats span { display: flex; align-items: center; gap: 4px; }
+
+    #controls { display: flex; gap: 8px; align-items: center; }
+
+    button.ctrl-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    button.ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    button.ctrl-btn.active { border-color: var(--accent2); color: var(--accent2); }
+
+    /* ── Connect overlay ── */
+    #connect-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10,10,15,0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    #connect-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 32px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 340px;
+    }
+
+    #connect-box h2 {
+      font-size: 18px;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label { font-size: 11px; color: var(--muted); }
+
+    .form-group input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus { border-color: var(--accent); }
+
+    #connect-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      margin-top: 4px;
+    }
+    #connect-btn:hover { opacity: 0.88; }
+
+    /* ── Video area ── */
+    #viewport {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+    }
+
+    #screen {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+      cursor: none;
+      image-rendering: pixelated;
+    }
+
+    #screen.jpeg-mode {
+      object-fit: contain;
+    }
+
+    #remote-cursor {
+      position: absolute;
+      width: 16px; height: 16px;
+      background: rgba(124,106,247,0.9);
+      border-radius: 50% 50% 50% 0;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      pointer-events: none;
+      transition: left 0.04s linear, top 0.04s linear;
+      display: none;
+    }
+
+    /* ── Clipboard toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 20px;
+      font-size: 12px;
+      color: var(--text);
+      transition: transform 0.25s ease;
+      z-index: 200;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Keyboard shortcut bar ── */
+    #shortcut-bar {
+      display: none;
+      flex-shrink: 0;
+      padding: 6px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #shortcut-bar.visible { display: flex; }
+
+    .shortcut-chip {
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .shortcut-chip:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div id="topbar">
+  <div id="logo">Void<span>Desk</span></div>
+  <div id="status-dot" class="disconnected"></div>
+  <div id="status-text">Disconnected</div>
+  <div class="spacer"></div>
+  <div id="stats">
+    <span id="stat-fps">-- fps</span>
+    <span id="stat-kb">-- KB/s</span>
+    <span id="stat-latency">-- ms</span>
+  </div>
+  <div id="controls">
+    <button class="ctrl-btn" id="btn-fullscreen" title="Fullscreen">⛶</button>
+    <button class="ctrl-btn" id="btn-clipboard" title="Sync Clipboard">⎘</button>
+    <button class="ctrl-btn" id="btn-shortcuts" title="Shortcuts">⌨</button>
+    <button class="ctrl-btn" id="btn-disconnect" title="Disconnect">✕</button>
+  </div>
+</div>
+
+<!-- Viewport -->
+<div id="viewport">
+  <!-- MSE video player (H264/AV1) -->
+  <video id="screen" autoplay muted playsinline></video>
+  <!-- JPEG canvas fallback -->
+  <canvas id="canvas" style="display:none; max-width:100%; max-height:100%;"></canvas>
+  <div id="remote-cursor"></div>
+</div>
+
+<!-- Shortcut bar -->
+<div id="shortcut-bar">
+  <div class="shortcut-chip" data-keys="ctrl+c">Ctrl+C</div>
+  <div class="shortcut-chip" data-keys="ctrl+v">Ctrl+V</div>
+  <div class="shortcut-chip" data-keys="ctrl+z">Ctrl+Z</div>
+  <div class="shortcut-chip" data-keys="ctrl+a">Ctrl+A</div>
+  <div class="shortcut-chip" data-keys="ctrl+shift+t">Ctrl+Shift+T</div>
+  <div class="shortcut-chip" data-keys="super+d">Super+D</div>
+  <div class="shortcut-chip" data-keys="alt+F4">Alt+F4</div>
+  <div class="shortcut-chip" data-keys="ctrl+alt+t">Terminal</div>
+</div>
+
+<!-- Connect overlay -->
+<div id="connect-overlay">
+  <div id="connect-box">
+    <h2>VoidDesk</h2>
+    <div class="form-group">
+      <label>Server Address</label>
+      <input id="inp-host" type="text" value="localhost:8765" placeholder="host:port" />
+    </div>
+    <div class="form-group">
+      <label>Auth Token (optional)</label>
+      <input id="inp-token" type="password" placeholder="Leave blank if disabled" />
+    </div>
+    <button id="connect-btn">Connect</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// VoidDesk Client
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STATE = {
+  ws: null,
+  codec: null,
+  mime: null,
+  mediaSource: null,
+  sourceBuffer: null,
+  bufferQueue: [],
+  isJpeg: false,
+  connected: false,
+  inputEnabled: true,
+  // stats
+  frameCount: 0,
+  bytesReceived: 0,
+  lastStatTime: performance.now(),
+  lastPingTime: 0,
+};
+
+// DOM refs
+const video      = document.getElementById("screen");
+const canvas     = document.getElementById("canvas");
+const overlay    = document.getElementById("connect-overlay");
+const statusDot  = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+const viewport   = document.getElementById("viewport");
+const cursor     = document.getElementById("remote-cursor");
+const toast      = document.getElementById("toast");
+
+// ── Stats ticker ──────────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = performance.now();
+  const elapsed = (now - STATE.lastStatTime) / 1000;
+  if (elapsed > 0) {
+    document.getElementById("stat-fps").textContent =
+      `${Math.round(STATE.frameCount / elapsed)} fps`;
+    document.getElementById("stat-kb").textContent =
+      `${(STATE.bytesReceived / elapsed / 1024).toFixed(1)} KB/s`;
+    STATE.frameCount = 0;
+    STATE.bytesReceived = 0;
+    STATE.lastStatTime = now;
+  }
+}, 1000);
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg, ms = 2000) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), ms);
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+function setStatus(state, msg) {
+  statusDot.className = state;
+  statusText.textContent = msg;
+}
+
+// ── Connect ───────────────────────────────────────────────────────────────────
+function connect() {
+  const host  = document.getElementById("inp-host").value.trim();
+  const token = document.getElementById("inp-token").value.trim();
+  const url   = (location.protocol === "https:" ? "wss://" : "ws://") + host;
+
+  setStatus("connecting", `Connecting to ${host}…`);
+
+  STATE.ws = new WebSocket(url);
+  STATE.ws.binaryType = "arraybuffer";
+
+  STATE.ws.onopen = () => {
+    if (token) {
+      STATE.ws.send(JSON.stringify({ token }));
+    }
+    setStatus("connecting", "Waiting for init…");
+  };
+
+  STATE.ws.onmessage = (ev) => {
+    if (typeof ev.data === "string") {
+      handleTextMessage(JSON.parse(ev.data));
+    } else {
+      handleBinaryFrame(ev.data);
+    }
+  };
+
+  STATE.ws.onclose = (ev) => {
+    STATE.connected = false;
+    setStatus("disconnected", `Disconnected (${ev.code})`);
+    overlay.style.display = "flex";
+    teardownMediaSource();
+  };
+
+  STATE.ws.onerror = () => {
+    setStatus("disconnected", "Connection error");
+  };
+}
+
+function handleTextMessage(msg) {
+  if (msg.type === "init") {
+    STATE.codec  = msg.codec;
+    STATE.mime   = msg.mime;
+    STATE.isJpeg = msg.codec === "jpeg";
+
+    overlay.style.display = "none";
+    STATE.connected = true;
+    setStatus("connected", `Connected · ${msg.codec.toUpperCase()} · ${msg.width}×${msg.height} @ ${msg.fps}fps`);
+
+    if (STATE.isJpeg) {
+      video.style.display = "none";
+      canvas.style.display = "block";
+      canvas.width  = msg.width;
+      canvas.height = msg.height;
+    } else {
+      setupMediaSource(msg.mime);
+    }
+  } else if (msg.type === "pong") {
+    const latency = performance.now() - STATE.lastPingTime;
+    document.getElementById("stat-latency").textContent = `${Math.round(latency)}ms`;
+  }
+}
+
+// ── MSE Setup ─────────────────────────────────────────────────────────────────
+function setupMediaSource(mime) {
+  if (!MediaSource.isTypeSupported(mime)) {
+    console.warn(`MSE: codec not supported: ${mime} — falling back`);
+    return;
+  }
+
+  STATE.mediaSource = new MediaSource();
+  video.src = URL.createObjectURL(STATE.mediaSource);
+
+  STATE.mediaSource.addEventListener("sourceopen", () => {
+    STATE.sourceBuffer = STATE.mediaSource.addSourceBuffer(mime);
+    STATE.sourceBuffer.mode = "segments";
+    STATE.sourceBuffer.addEventListener("updateend", flushQueue);
+  });
+}
+
+function teardownMediaSource() {
+  if (STATE.mediaSource && STATE.mediaSource.readyState === "open") {
+    try { STATE.mediaSource.endOfStream(); } catch (_) {}
+  }
+  STATE.sourceBuffer = null;
+  STATE.mediaSource  = null;
+  STATE.bufferQueue  = [];
+  video.src = "";
+}
+
+function flushQueue() {
+  if (STATE.bufferQueue.length && STATE.sourceBuffer && !STATE.sourceBuffer.updating) {
+    STATE.sourceBuffer.appendBuffer(STATE.bufferQueue.shift());
+  }
+}
+
+// ── Binary frame handler ───────────────────────────────────────────────────────
+function handleBinaryFrame(data) {
+  STATE.bytesReceived += data.byteLength;
+  STATE.frameCount++;
+
+  if (STATE.isJpeg) {
+    renderJpegFrame(data);
+    return;
+  }
+
+  if (!STATE.sourceBuffer) return;
+
+  if (STATE.sourceBuffer.updating || STATE.bufferQueue.length > 0) {
+    STATE.bufferQueue.push(data);
+    // Evict if buffer is too large (>30 chunks)
+    if (STATE.bufferQueue.length > 30) STATE.bufferQueue.shift();
+  } else {
+    try {
+      STATE.sourceBuffer.appendBuffer(data);
+    } catch (err) {
+      console.warn("MSE appendBuffer error:", err.message);
+      // Attempt recovery: clear buffer
+      if (STATE.sourceBuffer && !STATE.sourceBuffer.updating) {
+        try {
+          STATE.sourceBuffer.remove(0, video.currentTime - 2);
+        } catch (_) {}
+      }
+    }
+  }
+
+  // Keep playback head near live edge
+  if (video.buffered.length) {
+    const end = video.buffered.end(video.buffered.length - 1);
+    if (end - video.currentTime > 1.5) {
+      video.currentTime = end - 0.1;
+    }
+  }
+}
+
+// ── JPEG canvas renderer ───────────────────────────────────────────────────────
+const _ctx = canvas.getContext("2d");
+const _jpegBlobCache = {};
+
+function renderJpegFrame(data) {
+  const blob = new Blob([data], { type: "image/jpeg" });
+  const url  = URL.createObjectURL(blob);
+  const img  = new Image();
+  img.onload = () => {
+    _ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+// ── Input forwarding ──────────────────────────────────────────────────────────
+function sendInput(obj) {
+  if (STATE.ws && STATE.ws.readyState === WebSocket.OPEN && STATE.connected) {
+    STATE.ws.send(JSON.stringify(obj));
+  }
+}
+
+function getVideoCoords(ev) {
+  const el  = STATE.isJpeg ? canvas : video;
+  const r   = el.getBoundingClientRect();
+  const vw  = el.videoWidth  || canvas.width;
+  const vh  = el.videoHeight || canvas.height;
+  const scaleX = vw / r.width;
+  const scaleY = vh / r.height;
+  return {
+    x: Math.round((ev.clientX - r.left) * scaleX),
+    y: Math.round((ev.clientY - r.top)  * scaleY),
+  };
+}
+
+viewport.addEventListener("mousemove", (ev) => {
+  const {x, y} = getVideoCoords(ev);
+  sendInput({ type: "mousemove", x, y });
+});
+
+viewport.addEventListener("mousedown", (ev) => {
+  ev.preventDefault();
+  sendInput({ type: "mousedown", button: ev.button + 1 });
+});
+
+viewport.addEventListener("mouseup", (ev) => {
+  sendInput({ type: "mouseup", button: ev.button + 1 });
+});
+
+viewport.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+viewport.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  sendInput({
+    type: "scroll",
+    direction: ev.deltaY > 0 ? "down" : "up",
+    amount: Math.max(1, Math.round(Math.abs(ev.deltaY) / 100)),
+  });
+}, { passive: false });
+
+document.addEventListener("keydown", (ev) => {
+  if (!STATE.connected) return;
+  // Don't capture browser shortcuts
+  if (ev.key === "F5" || (ev.ctrlKey && ev.key === "r")) return;
+  ev.preventDefault();
+  sendInput({ type: "keydown", key: ev.key });
+});
+
+document.addEventListener("keyup", (ev) => {
+  if (!STATE.connected) return;
+  sendInput({ type: "keyup", key: ev.key });
+});
+
+// ── Shortcut chips ────────────────────────────────────────────────────────────
+document.querySelectorAll(".shortcut-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    const keys = chip.dataset.keys.split("+");
+    sendInput({ type: "shortcut", keys });
+    showToast(`Sent: ${chip.dataset.keys}`);
+  });
+});
+
+// ── Clipboard sync ────────────────────────────────────────────────────────────
+document.getElementById("btn-clipboard").addEventListener("click", async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    sendInput({ type: "type", text });
+    showToast("Clipboard synced to remote");
+  } catch {
+    showToast("Clipboard access denied");
+  }
+});
+
+// ── Fullscreen ────────────────────────────────────────────────────────────────
+document.getElementById("btn-fullscreen").addEventListener("click", () => {
+  if (!document.fullscreenElement) {
+    viewport.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+// ── Shortcuts toggle ──────────────────────────────────────────────────────────
+document.getElementById("btn-shortcuts").addEventListener("click", () => {
+  const bar = document.getElementById("shortcut-bar");
+  bar.classList.toggle("visible");
+  document.getElementById("btn-shortcuts").classList.toggle("active");
+});
+
+// ── Disconnect ────────────────────────────────────────────────────────────────
+document.getElementById("btn-disconnect").addEventListener("click", () => {
+  if (STATE.ws) STATE.ws.close();
+});
+
+// ── Connect button ────────────────────────────────────────────────────────────
+document.getElementById("connect-btn").addEventListener("click", connect);
+document.getElementById("inp-token").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") connect();
+});
+document.getElementById("inp-host").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") connect();
+});
+
+// ── Ping loop ─────────────────────────────────────────────────────────────────
+setInterval(() => {
+  if (STATE.connected && STATE.ws.readyState === WebSocket.OPEN) {
+    STATE.lastPingTime = performance.now();
+    STATE.ws.send(JSON.stringify({ type: "ping" }));
+  }
+}, 3000);
+</script>
+</body>
+</html>
