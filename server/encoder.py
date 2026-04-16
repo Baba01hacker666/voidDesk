@@ -7,7 +7,7 @@ import subprocess
 import logging
 import shutil
 from typing import Optional
-from capture.base import CaptureBackend
+from .capture.base import CaptureBackend
 
 log = logging.getLogger("voiddesk.encoder")
 

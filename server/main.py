@@ -8,14 +8,10 @@ import asyncio
 import argparse
 import logging
 import os
-import sys
 import signal
 
-# Ensure local imports work
-sys.path.insert(0, os.path.dirname(__file__))
-
-from config import VoidDeskConfig
-from transport.ws_server import VoidDeskWS
+from .config import VoidDeskConfig
+from .transport.ws_server import VoidDeskWS
 
 logging.basicConfig(
     level=logging.INFO,
