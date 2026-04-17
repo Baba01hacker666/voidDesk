@@ -5,6 +5,7 @@ VoidDesk WebSocket Transport Server
 - Auth token support
 - Input event routing
 """
+
 import asyncio
 import json
 import logging
@@ -40,21 +41,27 @@ class VoidDeskWS:
     def _make_capture(self):
         backend = self.config.backend
         if backend == "x11":
-            return X11Capture(self.config.display, self.config.resolution, self.config.fps)
+            return X11Capture(
+                self.config.display, self.config.resolution, self.config.fps
+            )
         elif backend == "framebuffer":
-            return FramebufferCapture("/dev/fb0", self.config.resolution, self.config.fps)
+            return FramebufferCapture(
+                "/dev/fb0", self.config.resolution, self.config.fps
+            )
         elif backend == "wayland":
             return WaylandCapture(self.config.resolution, self.config.fps)
         else:
             log.warning(f"Unknown backend '{backend}', defaulting to x11")
-            return X11Capture(self.config.display, self.config.resolution, self.config.fps)
+            return X11Capture(
+                self.config.display, self.config.resolution, self.config.fps
+            )
 
     # ------------------------------------------------------------------ #
     #  Stream broadcast loop                                               #
     # ------------------------------------------------------------------ #
 
     async def _broadcast_stream(self):
-        """Main encode→broadcast loop. Runs while at least one client is connected."""
+        """Main encode→broadcast loop. Runs while clients connected."""
         capture = self._make_capture()
         self.encoder = FFmpegEncoder(
             capture,
@@ -64,7 +71,7 @@ class VoidDeskWS:
         )
 
         proc = self.encoder.start()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         log.info(f"Stream started (codec={self.config.codec})")
 
         try:
@@ -74,16 +81,27 @@ class VoidDeskWS:
                 )
                 if not data:
                     log.warning("Encoder stdout closed — stream ended")
+                    if proc.poll() is not None:
+                        stderr = proc.stderr.read().decode()
+                        log.error(
+                            f"ffmpeg exited with {proc.returncode}: "
+                            f"{stderr}"
+                        )
                     break
 
                 if self.clients:
                     results = await asyncio.gather(
-                        *[self._safe_send(c, data) for c in list(self.clients)],
+                        *[
+                            self._safe_send(c, data)
+                            for c in list(self.clients)
+                        ],
                         return_exceptions=True,
                     )
                     for r in results:
                         if isinstance(r, Exception):
-                            log.debug(f"Send error (client likely disconnected): {r}")
+                            log.debug(
+                                f"Send error (client likely disconnected): {r}"
+                            )
         except asyncio.CancelledError:
             log.info("Stream task cancelled")
         except Exception as e:
@@ -120,14 +138,18 @@ class VoidDeskWS:
                 return
 
         # Send codec/mime info to client
-        await ws.send(json.dumps({
-            "type": "init",
-            "codec": self.config.codec,
-            "mime": MIME_TYPES.get(self.config.codec, "video/mp4"),
-            "width": self.config.width,
-            "height": self.config.height,
-            "fps": self.config.fps,
-        }))
+        await ws.send(
+            json.dumps(
+                {
+                    "type": "init",
+                    "codec": self.config.codec,
+                    "mime": MIME_TYPES.get(self.config.codec, "video/mp4"),
+                    "width": self.config.width,
+                    "height": self.config.height,
+                    "fps": self.config.fps,
+                }
+            )
+        )
 
         log.info(f"Client connected: {ws.remote_address}")
 
@@ -135,7 +157,9 @@ class VoidDeskWS:
             self.clients.add(ws)
             if len(self.clients) == 1:
                 # First client — start streaming
-                self.stream_task = asyncio.create_task(self._broadcast_stream())
+                self.stream_task = asyncio.create_task(
+                    self._broadcast_stream()
+                )
 
         try:
             async for message in ws:
@@ -146,7 +170,10 @@ class VoidDeskWS:
         finally:
             async with self._lock:
                 self.clients.discard(ws)
-                log.info(f"Client disconnected: {ws.remote_address} ({len(self.clients)} remaining)")
+                log.info(
+                    f"Client disconnected: {ws.remote_address} "
+                    f"({len(self.clients)} remaining)"
+                )
                 if not self.clients and self.stream_task:
                     self.stream_task.cancel()
                     self.stream_task = None
@@ -157,7 +184,11 @@ class VoidDeskWS:
 
     async def _handle_input(self, raw):
         try:
-            event = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
+            event = (
+                json.loads(raw)
+                if isinstance(raw, str)
+                else json.loads(raw.decode())
+            )
             # Try xdotool first (X11), fall back to uinput
             if self.config.backend in ("x11", "xvfb"):
                 await inject_event(event, display=self.config.display)
@@ -184,9 +215,16 @@ class VoidDeskWS:
         log.info(f"VoidDesk server ready → {proto}://{host}:{port}")
         log.info(f"  Backend : {self.config.backend}")
         log.info(f"  Codec   : {self.config.codec}")
-        log.info(f"  Res/FPS : {self.config.resolution} @ {self.config.fps}fps")
-        log.info(f"  Input   : {'enabled' if self.config.input_enabled else 'disabled (view-only)'}")
-        log.info(f"  Auth    : {'enabled' if self.config.auth_token else 'disabled'}")
+        log.info(
+            f"  Res/FPS : {self.config.resolution} @ {self.config.fps}fps"
+        )
+        log.info(
+            f"  Input   : "
+            f"{'enabled' if self.config.input_enabled else 'disabled'}"
+        )
+        log.info(
+            f"  Auth: {'enabled' if self.config.auth_token else 'disabled'}"
+        )
 
         async with websockets.serve(
             self._handler,
@@ -198,3 +236,4 @@ class VoidDeskWS:
             ping_timeout=10,
         ):
             await asyncio.Future()  # run forever
+
