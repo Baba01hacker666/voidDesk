@@ -12,6 +12,7 @@ Event schema (JSON from client):
   { "type": "type",      "text": "hello world" }
   { "type": "shortcut",  "keys": ["ctrl", "c"] }
 """
+
 import asyncio
 import logging
 import shutil
@@ -20,27 +21,36 @@ log = logging.getLogger("voiddesk.input.xdotool")
 
 # Key name normalization — browser → xdotool
 KEY_MAP = {
-    "Enter":      "Return",
-    "Backspace":  "BackSpace",
-    "Delete":     "Delete",
-    "Escape":     "Escape",
-    "Tab":        "Tab",
-    "ArrowUp":    "Up",
-    "ArrowDown":  "Down",
-    "ArrowLeft":  "Left",
+    "Enter": "Return",
+    "Backspace": "BackSpace",
+    "Delete": "Delete",
+    "Escape": "Escape",
+    "Tab": "Tab",
+    "ArrowUp": "Up",
+    "ArrowDown": "Down",
+    "ArrowLeft": "Left",
     "ArrowRight": "Right",
-    "Home":       "Home",
-    "End":        "End",
-    "PageUp":     "Prior",
-    "PageDown":   "Next",
-    "F1": "F1", "F2": "F2", "F3": "F3", "F4": "F4",
-    "F5": "F5", "F6": "F6", "F7": "F7", "F8": "F8",
-    "F9": "F9", "F10": "F10", "F11": "F11", "F12": "F12",
-    "Control":    "ctrl",
-    "Alt":        "alt",
-    "Shift":      "shift",
-    "Meta":       "super",
-    " ":          "space",
+    "Home": "Home",
+    "End": "End",
+    "PageUp": "Prior",
+    "PageDown": "Next",
+    "F1": "F1",
+    "F2": "F2",
+    "F3": "F3",
+    "F4": "F4",
+    "F5": "F5",
+    "F6": "F6",
+    "F7": "F7",
+    "F8": "F8",
+    "F9": "F9",
+    "F10": "F10",
+    "F11": "F11",
+    "F12": "F12",
+    "Control": "ctrl",
+    "Alt": "alt",
+    "Shift": "shift",
+    "Meta": "super",
+    " ": "space",
 }
 
 _xdotool_available: bool = shutil.which("xdotool") is not None
@@ -52,7 +62,8 @@ async def _run(*args, display: str = ":0"):
         return
     env = {"DISPLAY": display}
     proc = await asyncio.create_subprocess_exec(
-        "xdotool", *args,
+        "xdotool",
+        *args,
         env={**__import__("os").environ, **env},
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
@@ -68,7 +79,9 @@ async def inject_event(event: dict, display: str = ":0"):
     t = event.get("type")
 
     if t == "mousemove":
-        await _run("mousemove", str(event["x"]), str(event["y"]), display=display)
+        await _run(
+            "mousemove", str(event["x"]), str(event["y"]), display=display
+        )
 
     elif t == "mousedown":
         btn = str(event.get("button", 1))
@@ -98,12 +111,23 @@ async def inject_event(event: dict, display: str = ":0"):
     elif t == "type":
         text = event.get("text", "")
         if text:
-            await _run("type", "--clearmodifiers", "--delay", "0", "--", text, display=display)
+            await _run(
+                "type",
+                "--clearmodifiers",
+                "--delay",
+                "0",
+                "--",
+                text,
+                display=display,
+            )
 
     elif t == "shortcut":
         keys = [_normalize_key(k) for k in event.get("keys", [])]
         if keys:
-            await _run("key", "--clearmodifiers", "+".join(keys), display=display)
+            await _run(
+                "key", "--clearmodifiers", "+".join(keys), display=display
+            )
 
     else:
         log.debug(f"Unknown input event type: {t}")
+
