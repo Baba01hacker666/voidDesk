@@ -1,10 +1,10 @@
 """
 Wayland capture backend.
-Requires: ffmpeg compiled with pipewire support, OR wf-recorder piped to ffmpeg.
+Requires: ffmpeg compiled with pipewire support.
 Falls back to wf-recorder if direct pipewire grab isn't available.
 """
+
 import shutil
-import subprocess
 from .base import CaptureBackend
 
 
@@ -19,19 +19,23 @@ class WaylandCapture(CaptureBackend):
 
     def validate(self) -> bool:
         import os
+
         return bool(os.environ.get("WAYLAND_DISPLAY"))
 
     def get_ffmpeg_input_args(self) -> list:
         if self._use_wfrecorder:
-            # wf-recorder can pipe raw video to stdout; handled specially in encoder
+            # wf-recorder can pipe raw video to stdout;
             # Return empty here; encoder will prepend wf-recorder pipe
             return ["-f", "rawvideo", "-i", "pipe:0"]
         else:
-            # Pipewire screencast via ffmpeg (requires libpipewire in ffmpeg build)
+            # Pipewire screencast via ffmpeg (requires libpipewire)
             return [
-                "-f", "pipewire",
-                "-framerate", str(self.fps),
-                "-i", "0",
+                "-f",
+                "pipewire",
+                "-framerate",
+                str(self.fps),
+                "-i",
+                "0",
             ]
 
     def build_wfrecorder_cmd(self) -> list:
