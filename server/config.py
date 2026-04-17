@@ -3,6 +3,32 @@ VoidDesk Configuration
 """
 
 from dataclasses import dataclass
+from typing import Tuple
+
+
+def _parse_resolution(resolution: str) -> Tuple[int, int]:
+    """Parse and validate a WxH resolution string."""
+    normalized = resolution.strip().lower()
+    parts = normalized.split("x")
+    if len(parts) != 2:
+        raise ValueError(
+            f"Invalid resolution '{resolution}'. Expected format: WxH."
+        )
+
+    try:
+        width = int(parts[0])
+        height = int(parts[1])
+    except ValueError as exc:
+        raise ValueError(
+            f"Invalid resolution '{resolution}'. Width/height must be integers."
+        ) from exc
+
+    if width <= 0 or height <= 0:
+        raise ValueError(
+            f"Invalid resolution '{resolution}'. Width/height must be > 0."
+        )
+
+    return width, height
 
 
 @dataclass
@@ -19,13 +45,22 @@ class VoidDeskConfig:
     tls_key: str = ""
     chunk_size: int = 65536  # bytes per WS read
 
+    def __post_init__(self):
+        _parse_resolution(self.resolution)
+        if self.fps <= 0:
+            raise ValueError("fps must be > 0")
+        if self.chunk_size <= 0:
+            raise ValueError("chunk_size must be > 0")
+
     @property
     def width(self) -> int:
-        return int(self.resolution.split("x")[0])
+        width, _ = _parse_resolution(self.resolution)
+        return width
 
     @property
     def height(self) -> int:
-        return int(self.resolution.split("x")[1])
+        _, height = _parse_resolution(self.resolution)
+        return height
 
     @property
     def tls_enabled(self) -> bool:
