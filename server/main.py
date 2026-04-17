@@ -43,6 +43,7 @@ def detect_backend() -> str:
 def start_xvfb(display: str, resolution: str) -> int:
     """Spawn Xvfb and return PID."""
     import subprocess
+
     w, h = resolution.split("x")
     proc = subprocess.Popen(
         ["Xvfb", display, "-screen", "0", f"{w}x{h}x24", "-ac"],
@@ -50,6 +51,7 @@ def start_xvfb(display: str, resolution: str) -> int:
         stderr=subprocess.DEVNULL,
     )
     import time
+
     time.sleep(1.2)
     log.info(f"Xvfb started on {display} (PID {proc.pid})")
     return proc.pid
@@ -61,9 +63,15 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--host", default="0.0.0.0", help="Bind address")
-    parser.add_argument("--port", type=int, default=8765, help="WebSocket port")
-    parser.add_argument("--display", default=":0", help="X display (e.g. :0, :1)")
-    parser.add_argument("--res", default="1280x720", help="Capture resolution WxH")
+    parser.add_argument(
+        "--port", type=int, default=8765, help="WebSocket port"
+    )
+    parser.add_argument(
+        "--display", default=":0", help="X display (e.g. :0, :1)"
+    )
+    parser.add_argument(
+        "--res", default="1280x720", help="Capture resolution WxH"
+    )
     parser.add_argument("--fps", type=int, default=30, help="Target framerate")
     parser.add_argument(
         "--codec",
@@ -77,11 +85,25 @@ def main():
         default="auto",
         help="Capture backend",
     )
-    parser.add_argument("--quality", type=int, default=28, help="CRF quality (lower=better)")
-    parser.add_argument("--token", default="", help="Optional auth token for WS connections")
-    parser.add_argument("--no-input", action="store_true", help="Disable input injection (view-only mode)")
-    parser.add_argument("--tls-cert", default="", help="Path to TLS certificate (enables wss://)")
-    parser.add_argument("--tls-key", default="", help="Path to TLS private key")
+    parser.add_argument(
+        "--quality", type=int, default=28, help="CRF quality (lower=better)"
+    )
+    parser.add_argument(
+        "--token", default="", help="Optional auth token for WS connections"
+    )
+    parser.add_argument(
+        "--no-input",
+        action="store_true",
+        help="Disable input injection (view-only mode)",
+    )
+    parser.add_argument(
+        "--tls-cert",
+        default="",
+        help="Path to TLS certificate (enables wss://)",
+    )
+    parser.add_argument(
+        "--tls-key", default="", help="Path to TLS private key"
+    )
 
     args = parser.parse_args()
 
@@ -108,19 +130,25 @@ def main():
 
     server = VoidDeskWS(config)
 
-    loop = asyncio.get_event_loop()
-
-    def _shutdown(sig, frame):
-        log.info(f"Signal {sig.name} received — shutting down")
+    def _shutdown(sig=None, frame=None):
+        sig_name = sig.name if hasattr(sig, "name") else str(sig)
+        log.info(f"Signal {sig_name} received — shutting down")
         if xvfb_pid:
-            os.kill(xvfb_pid, signal.SIGTERM)
-        loop.stop()
+            try:
+                os.kill(xvfb_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
+            loop = asyncio.get_running_loop()
+            loop.stop()
+        except RuntimeError:
+            pass
 
     signal.signal(signal.SIGINT, _shutdown)
     signal.signal(signal.SIGTERM, _shutdown)
 
     try:
-        loop.run_until_complete(server.serve(args.host, args.port))
+        asyncio.run(server.serve(args.host, args.port))
     except Exception as e:
         log.error(f"Server error: {e}")
     finally:
@@ -133,3 +161,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
