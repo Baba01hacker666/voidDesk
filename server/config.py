@@ -1,7 +1,8 @@
 """
 VoidDesk Configuration
 """
-from dataclasses import dataclass, field
+
+from dataclasses import dataclass
 
 
 @dataclass
@@ -9,14 +10,14 @@ class VoidDeskConfig:
     display: str = ":0"
     resolution: str = "1280x720"
     fps: int = 30
-    codec: str = "h264"          # h264 | av1 | jpeg
-    backend: str = "x11"         # x11 | wayland | framebuffer
-    quality: int = 28            # CRF value; lower = better quality
-    auth_token: str = ""         # empty = no auth
+    codec: str = "h264"  # h264 | av1 | jpeg
+    backend: str = "x11"  # x11 | wayland | framebuffer
+    quality: int = 28  # CRF value; lower = better quality
+    auth_token: str = ""  # empty = no auth
     input_enabled: bool = True
     tls_cert: str = ""
     tls_key: str = ""
-    chunk_size: int = 65536      # bytes per WS read
+    chunk_size: int = 65536  # bytes per WS read
 
     @property
     def width(self) -> int:
