@@ -13,10 +13,50 @@ import signal
 from .config import VoidDeskConfig
 from .transport.ws_server import VoidDeskWS
 
+
+class _DropBenignWebSocketHandshakeErrors(logging.Filter):
+    """
+    Suppress noisy websockets.server errors for clients that connect and
+    disconnect before sending any HTTP bytes.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name != "websockets.server":
+            return True
+
+        if "opening handshake failed" not in record.getMessage():
+            return True
+
+        if not record.exc_info:
+            return True
+
+        _, exc, _ = record.exc_info
+        if exc is None:
+            return True
+
+        chain = []
+        current = exc
+        while current is not None:
+            chain.append(str(current))
+            current = current.__cause__
+
+        chain_text = " | ".join(chain)
+        benign_parts = (
+            "did not receive a valid HTTP request",
+            "connection closed while reading HTTP request line",
+            "stream ends after 0 bytes, before end of line",
+        )
+
+        return not all(part in chain_text for part in benign_parts)
+
+
 logging.basicConfig(
     level=logging.INFO,
     format="[VoidDesk] %(asctime)s [%(name)s] %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
+)
+logging.getLogger("websockets.server").addFilter(
+    _DropBenignWebSocketHandshakeErrors()
 )
 log = logging.getLogger("voiddesk.main")
 
@@ -161,4 +201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
