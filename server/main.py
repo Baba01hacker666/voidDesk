@@ -125,6 +125,8 @@ def start_xvfb(display: str, resolution: str) -> int:
 
 
 def main():
+    default_display = os.environ.get("DISPLAY") or ":0"
+
     parser = argparse.ArgumentParser(
         description="VoidDesk — Fast browser-native remote desktop server",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -134,7 +136,9 @@ def main():
         "--port", type=int, default=8765, help="WebSocket port"
     )
     parser.add_argument(
-        "--display", default=":0", help="X display (e.g. :0, :1)"
+        "--display",
+        default=default_display,
+        help="X display (defaults to DISPLAY env, else :0)",
     )
     parser.add_argument(
         "--res", default="1280x720", help="Capture resolution WxH"
