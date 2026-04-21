@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import signal
+import re
 
 from .config import VoidDeskConfig
 from .transport.ws_server import VoidDeskWS
@@ -61,6 +62,26 @@ logging.getLogger("websockets.server").addFilter(
 log = logging.getLogger("voiddesk.main")
 
 
+def _has_local_x11_socket(display: str) -> bool:
+    """
+    Return True when DISPLAY appears to target a local X11 Unix socket and
+    that socket exists.
+
+    For non-local DISPLAY formats (e.g. host:0), we return True because this
+    check cannot validate remote endpoints.
+    """
+    if not display:
+        return False
+
+    match = re.match(r"^:([0-9]+)(?:\.[0-9]+)?$", display)
+    if not match:
+        return True
+
+    display_num = match.group(1)
+    socket_path = f"/tmp/.X11-unix/X{display_num}"
+    return os.path.exists(socket_path)
+
+
 def detect_backend() -> str:
     display = os.environ.get("DISPLAY", "")
     wayland = os.environ.get("WAYLAND_DISPLAY", "")
@@ -69,9 +90,15 @@ def detect_backend() -> str:
     if wayland:
         log.info("Detected Wayland session")
         return "wayland"
-    elif display:
+    elif display and _has_local_x11_socket(display):
         log.info(f"Detected X11 session: {display}")
         return "x11"
+    elif display:
+        log.info(
+            f"DISPLAY is set to {display}, but no local X11 socket is "
+            f"available. Falling back to Xvfb virtual display."
+        )
+        return "xvfb"
     elif fb:
         log.info("Detected framebuffer: /dev/fb0")
         return "framebuffer"
