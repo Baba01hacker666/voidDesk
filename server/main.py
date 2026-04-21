@@ -9,16 +9,77 @@ import argparse
 import logging
 import os
 import signal
+import re
 
 from .config import VoidDeskConfig
 from .transport.ws_server import VoidDeskWS
+
+
+class _DropBenignWebSocketHandshakeErrors(logging.Filter):
+    """
+    Suppress noisy websockets.server errors for clients that connect and
+    disconnect before sending any HTTP bytes.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.name != "websockets.server":
+            return True
+
+        if "opening handshake failed" not in record.getMessage():
+            return True
+
+        if not record.exc_info:
+            return True
+
+        _, exc, _ = record.exc_info
+        if exc is None:
+            return True
+
+        chain = []
+        current = exc
+        while current is not None:
+            chain.append(str(current))
+            current = current.__cause__
+
+        chain_text = " | ".join(chain)
+        benign_parts = (
+            "did not receive a valid HTTP request",
+            "connection closed while reading HTTP request line",
+            "stream ends after 0 bytes, before end of line",
+        )
+
+        return not all(part in chain_text for part in benign_parts)
+
 
 logging.basicConfig(
     level=logging.INFO,
     format="[VoidDesk] %(asctime)s [%(name)s] %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
 )
+logging.getLogger("websockets.server").addFilter(
+    _DropBenignWebSocketHandshakeErrors()
+)
 log = logging.getLogger("voiddesk.main")
+
+
+def _has_local_x11_socket(display: str) -> bool:
+    """
+    Return True when DISPLAY appears to target a local X11 Unix socket and
+    that socket exists.
+
+    For non-local DISPLAY formats (e.g. host:0), we return True because this
+    check cannot validate remote endpoints.
+    """
+    if not display:
+        return False
+
+    match = re.match(r"^:([0-9]+)(?:\.[0-9]+)?$", display)
+    if not match:
+        return True
+
+    display_num = match.group(1)
+    socket_path = f"/tmp/.X11-unix/X{display_num}"
+    return os.path.exists(socket_path)
 
 
 def detect_backend() -> str:
@@ -29,9 +90,15 @@ def detect_backend() -> str:
     if wayland:
         log.info("Detected Wayland session")
         return "wayland"
-    elif display:
+    elif display and _has_local_x11_socket(display):
         log.info(f"Detected X11 session: {display}")
         return "x11"
+    elif display:
+        log.info(
+            f"DISPLAY is set to {display}, but no local X11 socket is "
+            f"available. Falling back to Xvfb virtual display."
+        )
+        return "xvfb"
     elif fb:
         log.info("Detected framebuffer: /dev/fb0")
         return "framebuffer"
@@ -161,4 +228,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
